@@ -1,0 +1,33 @@
+services:
+  mcp-forgejo:
+    container_name: mcp-forgejo
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8190:3000"
+    environment:
+      - PORT=3000
+      - HOST=0.0.0.0
+      - FORGEJO_URL=${FORGEJO_URL}
+      - FORGEJO_ACCESS_TOKEN=${FORGEJO_ACCESS_TOKEN}
+      - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/firebase-credentials.json
+      - FIREBASE_DATABASE_URL=${FIREBASE_DATABASE_URL}
+    volumes:
+      - ./credentials:/app/credentials:ro
+      - analytics-data:/data/analytics
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  analytics-data:

@@ -1,221 +1,229 @@
 # Forgejo MCP Server
 
-Connect your AI assistant to Forgejo repositories. Manage issues, pull requests, files, and more through natural language.
+A [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server for interacting with [Forgejo](https://forgejo.org/) instances through LLM interfaces.
 
-## What It Does
+Built with TypeScript and deployable via Docker to any VPS. Supports both **stdio** (local) and **Streamable HTTP** (remote/VPS) transports.
 
-Forgejo MCP Server is an integration plugin that connects Forgejo with [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) systems. Once configured, you can interact with your Forgejo repositories through any MCP-compatible AI assistant like Claude, Cursor, or VS Code extensions.
+## Key Features
 
-**Example commands you can use:**
-- "List all my repositories"
-- "Create an issue titled 'Bug in login page'"
-- "Show me open pull requests in my-org/my-repo"
-- "Get the contents of README.md from the main branch"
-- "Show me the latest Actions workflow runs in goern/forgejo-mcp"
+- **Repository Management** - Create repos, manage branches, files, and commits
+- **Pull Request Operations** - Create, review, merge PRs with full review management
+- **Issue Tracking** - Full issue lifecycle including comments and labels
+- **User & Organization** - User info and org team search
+- **CI/CD Integration** - Trigger and monitor Forgejo Actions workflows
+- **Search** - Search users, repositories, and organization teams
+- **VPS Deployment** - Docker + Nginx + GitHub Actions auto-deploy
+- **Firebase Analytics** - Optional usage tracking
+
+> **Note:** This MCP is designed for **Forgejo instances** (e.g., [Codeberg.org](https://codeberg.org)). It may work with Gitea for basic operations, but full compatibility is only guaranteed with Forgejo.
 
 ## Quick Start
 
-### 1. Install
+### Prerequisites
 
-**Option A: Using Go (Recommended)**
+- Node.js >= 18
+- A Forgejo/Codeberg access token ([create one here](https://codeberg.org/user/settings/applications))
 
-```bash
-go install codeberg.org/goern/forgejo-mcp/v2@latest
-```
-
-Ensure `$GOPATH/bin` (typically `~/go/bin`) is in your PATH.
-
-**Option B: Download Binary**
-
-Download the latest release from the [releases page](https://codeberg.org/goern/forgejo-mcp/releases).
-
-For Arch Linux, use your favorite AUR helper:
+### Installation
 
 ```bash
-yay -S forgejo-mcp      # builds from source
-yay -S forgejo-mcp-bin  # uses pre-built binary
+git clone https://github.com/hithereiamaliff/mcp-forgejo.git
+cd mcp-forgejo
+npm install
+npm run build
 ```
 
-### 2. Get Your Access Token
+### Configuration
 
-1. Log into your Forgejo instance
-2. Go to **Settings** → **Applications** → **Access Tokens**
-3. Create a new token with the permissions you need (repo, issue, etc.)
+Copy `.env.sample` to `.env` and fill in your credentials:
 
-### 3. Configure Your AI Assistant
+```env
+FORGEJO_URL=https://codeberg.org
+FORGEJO_ACCESS_TOKEN=your_token_here
+```
 
-Add this to your MCP configuration file:
+### Usage - Stdio Transport (Local)
 
-**For stdio mode** (most common):
+Add to your Claude Desktop or MCP client configuration:
 
 ```json
 {
   "mcpServers": {
     "forgejo": {
-      "command": "forgejo-mcp",
-      "args": [
-        "--transport", "stdio",
-        "--url", "https://your-forgejo-instance.org"
-      ],
+      "command": "node",
+      "args": ["dist/index.js"],
       "env": {
-        "FORGEJO_ACCESS_TOKEN": "<your personal access token>"
+        "FORGEJO_URL": "https://codeberg.org",
+        "FORGEJO_ACCESS_TOKEN": "YOUR_TOKEN_HERE"
       }
     }
   }
 }
 ```
 
-**For SSE mode** (HTTP-based):
+### Usage - HTTP Transport (VPS)
+
+```bash
+npm run serve:http
+```
+
+The server starts at `http://localhost:3000` with:
+- **MCP endpoint**: `POST /mcp`
+- **Health check**: `GET /health`
+- **Analytics**: `GET /analytics`
+
+Configure your MCP client to connect via Streamable HTTP:
 
 ```json
 {
   "mcpServers": {
     "forgejo": {
-      "url": "http://localhost:8080/sse"
+      "url": "https://your-vps.example.com/forgejo/mcp?url=https://codeberg.org&token=YOUR_TOKEN"
     }
   }
 }
 ```
 
-When using SSE mode, start the server first:
+## VPS Deployment
+
+### Docker
 
 ```bash
-forgejo-mcp --transport sse --url https://your-forgejo-instance.org --token <your-token>
+docker compose up -d
 ```
 
-### 4. Start Using It
+See `docker-compose.yml` for configuration. The container exposes port `8190` by default.
 
-Open your MCP-compatible AI assistant and try:
+### Nginx
 
-```
-List all my repositories
-```
+Add the location block from `deploy/nginx-mcp.conf` to your Nginx site config to proxy `/forgejo/` to the container.
 
-## Available Tools
+### Auto-Deploy (GitHub Actions)
 
+The `.github/workflows/deploy-vps.yml` workflow auto-deploys on push to `main`. Required GitHub secrets:
+
+| Secret | Description |
+|--------|-------------|
+| `VPS_HOST` | VPS hostname/IP |
+| `VPS_USERNAME` | SSH username |
+| `VPS_SSH_KEY` | SSH private key |
+| `VPS_PORT` | SSH port |
+| `FORGEJO_URL` | Forgejo instance URL |
+| `FORGEJO_ACCESS_TOKEN` | Forgejo API token |
+
+## Available Tools (35+)
+
+### User
 | Tool | Description |
 |------|-------------|
-| **User** | |
-| `get_my_user_info` | Get information about the authenticated user |
-| `search_users` | Search for users |
-| **Repositories** | |
-| `list_my_repos` | List all repositories you own |
+| `get_my_user_info` | Get authenticated user info |
+
+### Repository
+| Tool | Description |
+|------|-------------|
 | `create_repo` | Create a new repository |
 | `fork_repo` | Fork a repository |
-| `search_repos` | Search for repositories |
-| **Branches** | |
-| `list_branches` | List all branches in a repository |
-| `create_branch` | Create a new branch |
-| `delete_branch` | Delete a branch |
-| **Files** | |
-| `get_file_content` | Get the content of a file |
+| `list_my_repos` | List user's repositories |
+| `get_file_content` | Get file content |
 | `create_file` | Create a new file |
 | `update_file` | Update an existing file |
 | `delete_file` | Delete a file |
-| **Commits** | |
-| `list_repo_commits` | List commits in a repository |
-| **Issues** | |
-| `list_repo_issues` | List issues in a repository |
-| `get_issue_by_index` | Get a specific issue |
+| `create_branch` | Create a branch |
+| `delete_branch` | Delete a branch |
+| `list_branches` | List branches |
+| `list_repo_commits` | List repository commits |
+
+### Issues
+| Tool | Description |
+|------|-------------|
+| `get_issue_by_index` | Get issue by index |
+| `list_repo_issues` | List repository issues |
 | `create_issue` | Create a new issue |
+| `update_issue` | Update an issue |
 | `add_issue_labels` | Add labels to an issue |
-| `update_issue` | Update an existing issue |
-| `issue_state_change` | Open or close an issue |
-| **Comments** | |
-| `list_issue_comments` | List comments on an issue or PR |
-| `get_issue_comment` | Get a specific comment |
-| `create_issue_comment` | Add a comment to an issue or PR |
+| `issue_state_change` | Change issue state |
+| `list_issue_comments` | List comments |
+| `get_issue_comment` | Get a comment |
+| `create_issue_comment` | Create a comment |
 | `edit_issue_comment` | Edit a comment |
 | `delete_issue_comment` | Delete a comment |
-| **Pull Requests** | |
-| `list_repo_pull_requests` | List pull requests in a repository |
-| `get_pull_request_by_index` | Get a specific pull request |
-| `create_pull_request` | Create a new pull request |
-| `update_pull_request` | Update an existing pull request |
-| `list_pull_reviews` | List reviews for a pull request |
-| `get_pull_review` | Get a specific pull request review |
-| `list_pull_review_comments` | List comments on a pull request review |
-| **Actions** | |
-| `dispatch_workflow` | Trigger a workflow run via `workflow_dispatch` event |
-| `list_workflow_runs` | List workflow runs with optional filtering by status, event, or SHA |
-| `get_workflow_run` | Get details of a specific workflow run by ID |
-| **Organizations** | |
-| `search_org_teams` | Search for teams in an organization |
-| **Server** | |
-| `get_forgejo_mcp_server_version` | Get the MCP server version |
 
-## CLI Mode
+### Pull Requests
+| Tool | Description |
+|------|-------------|
+| `get_pull_request_by_index` | Get PR by index |
+| `list_repo_pull_requests` | List PRs |
+| `create_pull_request` | Create a PR |
+| `update_pull_request` | Update a PR |
+| `merge_pull_request` | Merge a PR |
+| `list_pull_reviews` | List reviews |
+| `get_pull_review` | Get a review |
+| `list_pull_review_comments` | List review comments |
+| `create_pull_review` | Create a review |
+| `submit_pull_review` | Submit a review |
+| `dismiss_pull_review` | Dismiss a review |
+| `delete_pull_review` | Delete a review |
+| `create_review_requests` | Request reviews |
+| `delete_review_requests` | Delete review requests |
 
-You can invoke any tool directly from the command line without running an MCP server. This is useful for shell scripts, CI/CD pipelines, and Claude Code skills.
+### Search
+| Tool | Description |
+|------|-------------|
+| `search_users` | Search for users |
+| `search_repos` | Search for repositories |
+| `search_org_teams` | Search organization teams |
 
-```bash
-# List all available tools (grouped by domain)
-forgejo-mcp --cli list
+### Actions/CI
+| Tool | Description |
+|------|-------------|
+| `dispatch_workflow` | Trigger a workflow run |
+| `list_workflow_runs` | List workflow runs |
+| `get_workflow_run` | Get workflow run details |
 
-# Invoke a tool with JSON arguments
-forgejo-mcp --cli get_issue_by_index --args '{"owner":"goern","repo":"forgejo-mcp","index":1}'
+### Utility
+| Tool | Description |
+|------|-------------|
+| `hello` | Test server connectivity |
 
-# Pipe JSON arguments via stdin
-echo '{"owner":"goern","repo":"forgejo-mcp"}' | forgejo-mcp --cli list_repo_issues
+## Environment Variables
 
-# List recent workflow runs (text output)
-forgejo-mcp --cli list_workflow_runs \
-  --args '{"owner":"goern","repo":"forgejo-mcp"}' \
-  --output=text
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `FORGEJO_URL` | URL of the Forgejo instance | Required |
+| `FORGEJO_ACCESS_TOKEN` | Access token for authentication | Required |
+| `PORT` | HTTP server port | `3000` |
+| `HOST` | HTTP server host | `0.0.0.0` |
+| `GOOGLE_APPLICATION_CREDENTIALS` | Firebase credentials path | Optional |
+| `FIREBASE_DATABASE_URL` | Firebase Realtime DB URL | Optional |
 
-# List only failed runs
-forgejo-mcp --cli list_workflow_runs \
-  --args '{"owner":"goern","repo":"forgejo-mcp","status":"failure"}' \
-  --output=text
+## Architecture
 
-# Show a tool's parameters
-forgejo-mcp --cli create_issue --help
-
-# Control output format (json or text)
-forgejo-mcp --cli list --output=json
-forgejo-mcp --cli get_my_user_info --args '{}' --output=text
+```
+src/
+  index.ts              # Stdio entry point
+  http-server.ts         # HTTP entry point (Express + Streamable HTTP)
+  forgejo-client.ts      # Axios-based Forgejo API client
+  firebase-analytics.ts  # Optional Firebase analytics
+  tools/
+    register.ts          # Tool registration hub
+    user.tools.ts        # User tools
+    repo.tools.ts        # Repository tools
+    branch.tools.ts      # Branch tools
+    file.tools.ts        # File tools
+    commit.tools.ts      # Commit tools
+    issue.tools.ts       # Issue tools
+    comment.tools.ts     # Comment tools
+    pull.tools.ts        # Pull request tools
+    review.tools.ts      # Review tools
+    search.tools.ts      # Search tools
+    actions.tools.ts     # Actions/workflow tools
 ```
 
-CLI mode requires the same `FORGEJO_URL` and `FORGEJO_ACCESS_TOKEN` configuration as MCP server mode. Tool results are written as JSON to stdout by default; errors go to stderr with a non-zero exit code.
+## Acknowledgements
 
-## Configuration Options
-
-You can configure the server using command-line arguments or environment variables:
-
-| CLI Argument | Environment Variable | Description |
-|--------------|---------------------|-------------|
-| `--url` | `FORGEJO_URL` | Your Forgejo instance URL |
-| `--token` | `FORGEJO_ACCESS_TOKEN` | Your personal access token |
-| `--debug` | `FORGEJO_DEBUG` | Enable debug mode |
-| `--transport` | - | Transport mode: `stdio` or `sse` |
-| `--sse-port` | - | Port for SSE mode (default: 8080) |
-| `--cli` | - | Enter CLI mode for direct tool invocation |
-
-Command-line arguments take priority over environment variables.
-
-## Troubleshooting
-
-**Enable debug mode** to see detailed logs:
-
-```bash
-forgejo-mcp --transport sse --url <url> --token <token> --debug
-```
-
-Or set the environment variable:
-
-```bash
-export FORGEJO_DEBUG=true
-```
-
-## Getting Help
-
-- [Report issues](https://codeberg.org/goern/forgejo-mcp/issues)
-- [View source code](https://codeberg.org/goern/forgejo-mcp)
-
-## For Developers
-
-See [DEVELOPER.md](DEVELOPER.md) for build instructions, architecture overview, and contribution guidelines.
+- Original [gitea-mcp](https://github.com/ArKade523/gitea-mcp) by @ArKade523
+- Inspired by the Go implementation at [codeberg.org/goern/forgejo-mcp](https://codeberg.org/goern/forgejo-mcp)
 
 ## License
 
-This project is open source. See the repository for license details.
+MIT - see [LICENSE](LICENSE) for details.

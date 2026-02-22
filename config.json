@@ -1,14 +1,13 @@
 {
   "mcpServers": {
     "forgejo": {
-      "command": "~/code/forgejo-mcp/forgejo-mcp",
+      "command": "node",
       "args": [
-        "--transport", "stdio",
-        "--url", "https://example.org"
+        "dist/index.js"
       ],
       "env": {
-        "FORGEJO_URL": "https://example.org",
-        "FORGEJO_ACCESS_TOKEN": "<your personal access token>",
+        "FORGEJO_URL": "https://codeberg.org",
+        "FORGEJO_ACCESS_TOKEN": "YOUR_FORGEJO_TOKEN",
         "FORGEJO_DEBUG": "false"
       },
       "disabled": false,

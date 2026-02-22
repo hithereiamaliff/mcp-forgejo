@@ -1,0 +1,61 @@
+{
+  "name": "mcp-forgejo",
+  "version": "3.0.0",
+  "description": "A Model Context Protocol (MCP) server for interacting with Forgejo instances through LLM interfaces",
+  "main": "./dist/index.js",
+  "type": "module",
+  "files": [
+    "dist/**/*",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "start": "node dist/index.js",
+    "start:http": "node dist/http-server.js",
+    "build": "tsc",
+    "dev": "npx tsx src/index.ts",
+    "dev:http": "npx tsx src/http-server.ts",
+    "serve:http": "npm run build && node dist/http-server.js",
+    "lint": "eslint src/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts --fix",
+    "format": "prettier --write src/**/*.ts",
+    "format:check": "prettier --check src/**/*.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "mcp",
+    "forgejo",
+    "gitea",
+    "git",
+    "code-hosting",
+    "model-context-protocol",
+    "ai-tools"
+  ],
+  "author": "hithereiamaliff",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/hithereiamaliff/mcp-forgejo.git"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.1",
+    "axios": "^1.11.0",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.1",
+    "express": "^4.21.0",
+    "firebase-admin": "^13.6.0",
+    "zod": "^3.25.57"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.5",
+    "@types/node": "^22.15.31",
+    "prettier": "^3.5.3",
+    "tsx": "^4.7.0",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

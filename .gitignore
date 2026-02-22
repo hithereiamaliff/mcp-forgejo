@@ -1,12 +1,15 @@
+# Go binaries (legacy)
 gitea-mcp
 gitea-mcp.exe
+forgejo-mcp
 
+# Node.js
+node_modules/
+dist/
 *.log
 
 # Build output
 build/
-dist/
-forgejo-mcp
 
 # Environment variables
 .env
@@ -15,6 +18,9 @@ forgejo-mcp
 .env.test.local
 .env.production.local
 .envrc
+
+# Firebase credentials
+credentials/
 
 # IDE and editor files
 .idea/
@@ -28,6 +34,5 @@ forgejo-mcp
 Thumbs.db
 
 # Claude Code settings
-.claude/settings.local.json
 .claude/settings.local.json
 .social-media/

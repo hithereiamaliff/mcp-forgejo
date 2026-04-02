@@ -1,6 +1,6 @@
 # Forgejo MCP — Architecture Rebuild Plan
 
-> **Goal:** Replace the current Go-based codebase (forked from `codeberg.org/goern/forgejo-mcp`) with a TypeScript rewrite that replicates the architecture of `hithereiamaliff/mcp-github`, adapted for the Forgejo REST API.
+> **Goal:** Replace the current Go-based codebase (forked from `codeberg.org/goern/forgejo-mcp`) with a TypeScript rewrite that replicates the architecture of `hithereiamaliff/mcp-github`, adapted for the Forgejo REST API, fully integrated with `hithereiamaliff/mcp-key-service`.
 
 ## Background
 
@@ -80,6 +80,121 @@ mcp-forgejo/
 ├── package.json
 └── tsconfig.json
 ```
+
+---
+
+## Key-Service Integration
+
+### Overview
+
+The rebuild must integrate with `hithereiamaliff/mcp-key-service`, the shared API key management service that powers all TechMavie MCP servers. This is not optional — it's the core auth infrastructure.
+
+**Key-service repo:** [hithereiamaliff/mcp-key-service](https://github.com/hithereiamaliff/mcp-key-service)
+**Live portal:** [mcpkeys.techmavie.digital](https://mcpkeys.techmavie.digital)
+
+### How It Works
+
+```
+User (Claude.ai, Cursor, etc.)
+  │
+  │  Connects with usr_ key in URL
+  ▼
+mcp-forgejo (mcp.techmavie.digital/forgejo/mcp/usr_...)
+  │
+  │  POST /internal/resolve  (Bearer: forgejo-server-token)
+  ▼
+MCP Key Service → decrypts credentials → returns Forgejo token + instance URL
+  │
+  ▼
+mcp-forgejo uses returned credentials to call Forgejo API
+```
+
+1. User creates a connection on [mcpkeys.techmavie.digital](https://mcpkeys.techmavie.digital), selects "Forgejo" connector, enters their Forgejo instance URL and access token.
+2. Key-service encrypts and stores the credentials, returns a `usr_...` key.
+3. User configures their MCP client: `https://mcp.techmavie.digital/forgejo/mcp/usr_...`
+4. When a request arrives, `mcp-forgejo` extracts the `usr_` key from the URL path, calls `/internal/resolve` on the key-service.
+5. Key-service decrypts and returns the Forgejo instance URL and access token.
+6. `mcp-forgejo` uses those credentials for the Forgejo API call, scoped to that user's instance.
+
+### Changes Required in `mcp-key-service`
+
+#### 1. New Connector Definition
+
+Add a `forgejo` connector to `src/connectors.ts`:
+
+```typescript
+forgejo: {
+  label: 'Forgejo',
+  fields: [
+    {
+      key: 'forgejo_url',
+      label: 'Forgejo Instance URL',
+      type: 'url',
+      required: true,
+      placeholder: 'https://git.example.com',
+      helpText: 'The base URL of your Forgejo instance',
+    },
+    {
+      key: 'forgejo_token',
+      label: 'Access Token',
+      type: 'password',
+      required: true,
+      helpText: 'Generate at Forgejo → Settings → Applications → Access Tokens',
+    },
+  ],
+  servers: ['forgejo'],
+},
+```
+
+#### 2. New Server Token
+
+Add a `forgejo` entry to `INTERNAL_SERVER_TOKENS` in the VPS `.env` file:
+
+```
+INTERNAL_SERVER_TOKENS=nextcloud:token1,...,github:tokenN,forgejo:NEW_TOKEN_HERE
+```
+
+Generate with: `openssl rand -hex 32`
+
+#### 3. Key-Service Credential Flow
+
+When `mcp-forgejo` calls `/internal/resolve` with a `usr_` key, the key-service returns:
+
+```json
+{
+  "valid": true,
+  "credentials": {
+    "forgejo_url": "https://git.example.com",
+    "forgejo_token": "abc123..."
+  },
+  "label": "My Forgejo",
+  "connector_id": "forgejo"
+}
+```
+
+The MCP server then uses:
+- `credentials.forgejo_url` as the base URL for all API calls (replacing any hardcoded instance URL)
+- `credentials.forgejo_token` in the `Authorization: token {forgejo_token}` header
+
+### Multi-Instance Support
+
+Unlike the GitHub MCP (which always calls `api.github.com`), Forgejo is self-hosted — every user may have a **different instance URL**. This is a key architectural difference:
+
+| Aspect | `mcp-github` | `mcp-forgejo` |
+|--------|-------------|---------------|
+| API base URL | Always `https://api.github.com` | Varies per user (from key-service credentials) |
+| Token scope | GitHub PAT, same platform | Forgejo token, instance-specific |
+| Instance discovery | Not needed | URL comes from key-service `forgejo_url` credential |
+
+**Implementation note:** In `mcp-github`, the base URL is a constant. In `mcp-forgejo`, the base URL must be **dynamically resolved per request** from the key-service credentials. This means every tool function needs to accept the instance URL as a parameter rather than importing a constant.
+
+### Auth Modes Summary (with key-service)
+
+| Mode | Endpoint | How credentials are obtained |
+|------|----------|------------------------------|
+| **Hosted key-service** | `POST /forgejo/mcp/usr_...` | `usr_` key → key-service `/internal/resolve` → returns `forgejo_url` + `forgejo_token` |
+| **Self-hosted HTTP** | `POST /forgejo/mcp` | `X-Forgejo-URL` + `X-Forgejo-Token` headers (direct, no key-service) |
+| **CLI / stdio** | stdin/stdout | `FORGEJO_URL` + `FORGEJO_ACCESS_TOKEN` env vars |
 
 ---
 
@@ -172,7 +287,7 @@ mcp-forgejo/
    - `Dockerfile`
    - `docker-compose.yml`
    - `.env.sample`
-   - `src/http-server.ts` (as-is, this is infrastructure code)
+   - `src/http-server.ts` (as-is, this is infrastructure code — includes key-service resolution logic)
    - `src/cli.ts` (as-is)
    - `src/index.ts` (update server name/description)
 3. Replace `octokit` dependency with plain `fetch` calls to Forgejo's `/api/v1/` endpoints (Forgejo has no official JS SDK worth using — raw fetch is simpler and has zero dependencies)
@@ -181,8 +296,8 @@ mcp-forgejo/
 ### Phase 2: Core Tools (estimated: 1-2 Claude Code sessions)
 
 1. **`src/tools/repositories.ts`** — Adapt all repo/branch/file/commit tools
-   - Swap base URL pattern
-   - Change auth header format
+   - Swap base URL pattern — **must accept dynamic URL from key-service credentials, not a constant**
+   - Change auth header format (`Bearer` → `token`)
    - Change `per_page` → `limit` in pagination
    - Handle response field name differences
    - Remove `list_tags` / `get_tag` if not needed initially, or adapt
@@ -218,16 +333,62 @@ mcp-forgejo/
    - `list_workflow_runs`
    - `get_workflow_run`
 
-### Phase 4: Deployment & Testing (estimated: 1 session)
+### Phase 4: Key-Service Integration (estimated: 1 session)
+
+This phase covers changes to **both** `mcp-forgejo` and `mcp-key-service`:
+
+#### In `mcp-key-service`:
+
+1. **Add `forgejo` connector** to `src/connectors.ts` with fields:
+   - `forgejo_url` (type: `url`, required) — Forgejo instance base URL
+   - `forgejo_token` (type: `password`, required) — Forgejo personal access token
+   - `servers: ['forgejo']`
+
+2. **Generate a new server token** for Forgejo:
+   ```bash
+   openssl rand -hex 32
+   ```
+
+3. **Update `INTERNAL_SERVER_TOKENS`** in VPS `.env`:
+   ```
+   INTERNAL_SERVER_TOKENS=...,forgejo:GENERATED_TOKEN
+   ```
+
+4. **Rebuild key-service containers** to pick up the new connector:
+   ```bash
+   cd /path/to/mcp-key-service
+   docker compose build --no-cache
+   docker compose up -d
+   ```
+
+5. **Verify** the new connector appears on [mcpkeys.techmavie.digital](https://mcpkeys.techmavie.digital) portal.
+
+#### In `mcp-forgejo`:
+
+1. **Copy key-service resolution logic** from `mcp-github`'s `http-server.ts`:
+   - Extract `usr_` key from URL path
+   - Call `POST /internal/resolve` on key-service with `forgejo` server bearer token
+   - Extract `forgejo_url` and `forgejo_token` from response credentials
+
+2. **Pass dynamic credentials to tools** — every tool function must accept `(forgejoUrl: string, forgejoToken: string, ...)` instead of reading from a constant. This is the key difference from `mcp-github` where the base URL is always `api.github.com`.
+
+3. **Set environment variables** in `docker-compose.yml` and `.env.sample`:
+   ```
+   KEY_SERVICE_URL=http://mcp-key-service:8090
+   KEY_SERVICE_TOKEN=<the forgejo server token generated above>
+   ```
+
+4. **Join `mcp-network`** Docker network in `docker-compose.yml` so the container can reach the key-service internally.
+
+### Phase 5: Deployment & Testing (estimated: 1 session)
 
 1. Update `deploy/nginx-mcp.conf` — mount under `/forgejo/mcp`
-2. Update `docker-compose.yml` — service name, port, env vars
-3. Update `.env.sample` — replace GitHub vars with Forgejo vars:
-   - `FORGEJO_URL` (instance base URL)
-   - `FORGEJO_ACCESS_TOKEN` (for CLI/stdio mode)
-   - `MCP_API_KEY` (for self-hosted HTTP mode)
-   - `KEY_SERVICE_URL` and `KEY_SERVICE_TOKEN` (for hosted key-service mode)
-4. Test against the local Forgejo instance on the VPS
+2. Update `docker-compose.yml` — service name, port, env vars, network
+3. Deploy to VPS and test all auth modes:
+   - **Key-service mode:** Create a test connection on mcpkeys portal, connect via `usr_` key
+   - **Self-hosted mode:** Test with `X-Forgejo-URL` + `X-Forgejo-Token` headers
+   - **CLI mode:** Test with `FORGEJO_URL` + `FORGEJO_ACCESS_TOKEN` env vars
+4. Test against the Forgejo instance on the VPS
 5. Register on Smithery
 6. Update this repo's `README.md`
 
@@ -239,11 +400,11 @@ mcp-forgejo/
 |----------|---------|-------------|
 | `PORT` | `8080` | HTTP port |
 | `HOST` | `0.0.0.0` | Bind address |
-| `FORGEJO_URL` | (required) | Forgejo instance base URL (e.g., `https://git.example.com`) |
+| `FORGEJO_URL` | unset | Default Forgejo instance URL (CLI mode only; key-service mode gets this per-user) |
 | `FORGEJO_ACCESS_TOKEN` | unset | Token for CLI/stdio mode only |
 | `MCP_API_KEY` | unset | Required for self-hosted `/mcp` and analytics |
-| `KEY_SERVICE_URL` | unset | Hosted key-service resolver URL |
-| `KEY_SERVICE_TOKEN` | unset | Hosted key-service bearer token |
+| `KEY_SERVICE_URL` | unset | Key-service internal URL (e.g., `http://mcp-key-service:8090`) |
+| `KEY_SERVICE_TOKEN` | unset | Bearer token for `/internal/resolve` (the `forgejo` server token) |
 | `ALLOWED_ORIGINS` | `*` | Comma-separated CORS allowlist |
 | `PUBLIC_BASE_PATH` | unset | Reverse-proxy mount path (e.g., `/forgejo`) |
 
@@ -251,11 +412,11 @@ mcp-forgejo/
 
 ## Authentication Modes (Target)
 
-| Mode | Endpoint | Client auth |
-|------|----------|-------------|
-| Hosted key-service | `POST /forgejo/mcp/usr_...` | User key in path |
-| Self-hosted | `POST /forgejo/mcp` | `X-API-Key` + `X-Forgejo-Token` headers |
-| CLI | stdio | `FORGEJO_ACCESS_TOKEN` env var |
+| Mode | Endpoint | How credentials are obtained |
+|------|----------|------------------------------|
+| **Hosted key-service** | `POST /forgejo/mcp/usr_...` | `usr_` key → key-service `/internal/resolve` → returns `forgejo_url` + `forgejo_token` |
+| **Self-hosted HTTP** | `POST /forgejo/mcp` | `X-API-Key` (MCP auth) + `X-Forgejo-URL` + `X-Forgejo-Token` headers |
+| **CLI / stdio** | stdin/stdout | `FORGEJO_URL` + `FORGEJO_ACCESS_TOKEN` env vars |
 
 ---
 
@@ -279,9 +440,36 @@ mcp-forgejo/
 
 ---
 
+## Checklist Summary
+
+### `mcp-forgejo` repo
+- [ ] Strip Go codebase
+- [ ] Scaffold TypeScript project from `mcp-github`
+- [ ] Implement core tools (repos, issues, PRs, search)
+- [ ] Implement Forgejo-specific tools (notifications, user, actions)
+- [ ] Dynamic base URL per request (from key-service credentials)
+- [ ] Auth header: `Authorization: token {forgejo_token}`
+- [ ] Pagination: `per_page` → `limit`
+- [ ] Deploy behind Nginx at `/forgejo/mcp`
+- [ ] Join `mcp-network` Docker network
+- [ ] Test all 3 auth modes
+- [ ] Update README
+- [ ] Register on Smithery
+
+### `mcp-key-service` repo
+- [ ] Add `forgejo` connector to `src/connectors.ts`
+- [ ] Generate and add `forgejo` server token to `INTERNAL_SERVER_TOKENS`
+- [ ] Rebuild and deploy key-service
+- [ ] Verify connector appears on mcpkeys portal
+- [ ] Test `usr_` key creation and resolution for Forgejo
+
+---
+
 ## References
 
 - **Source architecture:** [hithereiamaliff/mcp-github](https://github.com/hithereiamaliff/mcp-github)
+- **Key-service:** [hithereiamaliff/mcp-key-service](https://github.com/hithereiamaliff/mcp-key-service)
+- **Key-service portal:** [mcpkeys.techmavie.digital](https://mcpkeys.techmavie.digital)
 - **Original fork:** [goern/forgejo-mcp](https://codeberg.org/goern/forgejo-mcp) (Go, retained for attribution)
 - **Forgejo API docs:** `https://{your-instance}/api/swagger` (auto-generated per instance)
 - **Forgejo API usage guide:** [forgejo.org/docs/next/user/api-usage](https://forgejo.org/docs/next/user/api-usage/)

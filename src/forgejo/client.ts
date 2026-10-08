@@ -245,6 +245,14 @@ export class ForgejoClient {
         // keep text (HTML error pages are trimmed below)
         if (/^\s*</.test(text)) parsed = '';
       }
+      if (res.status === 401 && !this.token) {
+        throw new ForgejoError(
+          'auth',
+          `${method} ${apiPath} needs a Forgejo access token, but none is configured. ` +
+            `Create one at ${this.baseUrl}/user/settings/applications.${this.credentialHint ? ` ${this.credentialHint.replace(/^Then update/, 'Then set')}` : ''}`,
+          401,
+        );
+      }
       const error = errorFromResponse(res.status, parsed, {
         method,
         path: apiPath,

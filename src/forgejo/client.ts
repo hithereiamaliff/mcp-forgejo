@@ -103,6 +103,29 @@ function errorCode(error: unknown): string | undefined {
   return undefined;
 }
 
+/**
+ * Refuse paths with "." / ".." segments (also percent-encoded, e.g. "%2e%2e")
+ * or backslashes. The URL parser resolves dot segments, so a branch named ".."
+ * in DELETE /repos/o/r/branches/.. would otherwise become DELETE /repos/o/r —
+ * deleting the whole repository. Checked here so every tool is covered.
+ */
+export function assertSafePath(path: string): void {
+  for (const segment of path.split('?')[0].split('/')) {
+    let decoded = segment;
+    try {
+      decoded = decodeURIComponent(segment);
+    } catch {
+      // malformed escapes are left to the server to reject
+    }
+    if (decoded === '.' || decoded === '..' || segment.includes('\\') || decoded.includes('\\')) {
+      throw new ForgejoError(
+        'validation',
+        `Invalid name in the request path: "${decoded}". Names consisting only of "." or "..", or containing backslashes, are not allowed.`,
+      );
+    }
+  }
+}
+
 function isTimeout(error: unknown): boolean {
   return error instanceof Error && (error.name === 'TimeoutError' || error.name === 'AbortError');
 }
@@ -143,7 +166,9 @@ export class ForgejoClient {
   }
 
   buildUrl(path: string, query?: Query): string {
-    const url = new URL(`${this.apiBase}${path.startsWith('/') ? path : `/${path}`}`);
+    const fullPath = path.startsWith('/') ? path : `/${path}`;
+    assertSafePath(fullPath);
+    const url = new URL(`${this.apiBase}${fullPath}`);
     for (const [key, value] of Object.entries(query ?? {})) {
       if (value === undefined || value === null || value === '') continue;
       if (Array.isArray(value)) value.forEach(v => url.searchParams.append(key, String(v)));

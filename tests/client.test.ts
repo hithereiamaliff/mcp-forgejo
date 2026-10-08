@@ -143,6 +143,33 @@ test('requireVersion() gives a clear message on old instances; capabilities are 
   assert.equal(f.requests.filter(r => r.path === '/version').length, 1, 'cached per instance');
 });
 
+test('dot segments and backslashes in paths are refused before any request (no path traversal)', async () => {
+  const f = fakeFetch(() => json({}));
+  const c = client(f.fetch);
+  for (const path of ['/repos/o/r/branches/..', '/repos/../r/branches/x', '/repos/o/r/tags/%2e%2e', '/repos/o/r/tags/.%2E', '/repos/o/./branches', '/repos/o/r/contents/a%5C..%5Cb']) {
+    await assert.rejects(c.delete(path), (e: ForgejoError) => e.kind === 'validation', path);
+  }
+  assert.equal(f.requests.length, 0);
+  // Ordinary names containing dots are fine.
+  await c.get('/repos/o/r/branches/release/v1.2..3');
+  await c.get('/repos/o/.github/contents/a.b/.env');
+  assert.equal(f.requests.length, 2);
+});
+
+test('a branch named ".." can never reach the delete-repository route', async () => {
+  const { connect } = await import('./helpers.js');
+  const f = fakeFetch(() => new Response(null, { status: 204 }));
+  const { call, close } = await connect({ fetchImpl: f.fetch });
+  const res = await call('forgejo_delete_branch', { owner: 'o', repo: 'r', branch: '..' });
+  assert.equal(res.isError, true);
+  assert.match(res.text, /Invalid name/);
+  assert.ok(!f.requests.some(r => r.method === 'DELETE'), 'no DELETE request may be sent');
+  const owner = await call('forgejo_delete_repo', { owner: '..', repo: 'r', confirm_full_name: '../r' });
+  assert.equal(owner.isError, true);
+  assert.ok(!f.requests.some(r => r.method === 'DELETE'));
+  await close();
+});
+
 test('204 responses resolve to null', async () => {
   const f = fakeFetch(() => new Response(null, { status: 204 }));
   assert.equal(await client(f.fetch).delete('/x'), null);

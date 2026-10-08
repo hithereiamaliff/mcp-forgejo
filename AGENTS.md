@@ -1,90 +1,58 @@
 # AGENTS.md
 
-This file provides guidance to AI coding assistants (Claude Code, Cursor, etc.) when working with this repository.
+Guidance for AI coding assistants (Claude Code, Cursor, etc.) working on this repository.
 
-For detailed developer documentation, see [DEVELOPER.md](DEVELOPER.md).
+## What this is
 
-## Quick Reference
+A TypeScript MCP server for Forgejo (self-hosted, Codeberg, mostly Gitea-compatible), built on the TechMavie v2 pattern (same as `mcp-zerobounce`): stateless Streamable HTTP with per-request isolation, mcp-key-service integration, plus a stdio CLI. The old Go implementation lives at tag `go-legacy-v2.17.0`.
+
+## Commands
 
 ```bash
-make build          # Build the binary (outputs ./forgejo-mcp)
-make vendor         # Tidy and verify Go module dependencies
+npm install
+npm run typecheck       # tsc --noEmit
+npm test                # node --import tsx --test tests/*.test.ts
+npm run build           # → dist/
+npm run dev             # HTTP server via tsx
+npm run docs:tools      # regenerate TOOLS.md (run after changing any tool)
+npm run smoke           # live check; needs FORGEJO_URL + FORGEJO_ACCESS_TOKEN in .env (SMOKE_WRITE=1 for writes)
 ```
 
-## Architecture Summary
+## Architecture
 
 ```
-main.go → cmd/cmd.go (CLI parsing) → operation/operation.go (tool registration) → operation/{domain}/*.go (tool handlers)
+src/http-server.ts ─┐                       ┌─ src/tools/<toolset>.ts  (defineTool objects)
+src/cli.ts ─────────┴─ src/index.ts ────────┤
+   (auth, key service,   createForgejoServer │  src/tools/shared.ts     (presets, schema factories, results)
+    toolset/read-only    + ALL_TOOLS         │  src/tools/lookups.ts    (label/milestone/SHA resolution)
+    per request)         + registerTools     └─ src/forgejo/client.ts   (REST client: SSRF guard, paging,
+                                                                         retries, errors, version gating)
 ```
 
-Key directories:
-- `operation/` - MCP tool definitions and handlers by domain
-- `pkg/forgejo/` - Singleton Forgejo SDK client wrapper
-- `pkg/to/` - Response formatting helpers
-- `pkg/params/` - Shared parameter descriptions
+- `src/forgejo/`: `client.ts` (requests), `errors.ts` (actionable messages), `url.ts` (instance URL normalisation and path helpers), `ssrf.ts` (guarded DNS lookup), `capabilities.ts` (version and paging limits per instance), `projections.ts` (compact JSON shapes).
+- `src/utils/`: `key-service.ts`, `analytics.ts`, `security.ts`, `format.ts` (markdown, `untrusted()`), `diff.ts`, `workflows.ts`.
+- `src/config.ts`: the toolset list, default toolsets, network policy.
 
-## Adding a New Tool
+## Adding or changing a tool
 
-1. Create or modify a file in `operation/{domain}/`
-2. Define tool with `mcp.NewTool()` and implement handler function
-3. Register in the domain's `RegisterTool(s *server.MCPServer)` function
-4. If new domain, import and call in `operation/operation.go`
+1. Add a `defineTool({...})` to the right `src/tools/<toolset>.ts` and include it in that file's exported array. The order of the array is the listing order.
+2. **Naming:** `forgejo_<verb>_<noun>`. Give it a short `title` and a description of at least 60 characters (what it does, when to use it, related tools).
+3. **Annotations:** pick a preset from `shared.ts`. Use `READ_ONLY` for GETs, `WRITE` for creates, `WRITE_IDEMPOTENT` for update/set, and `DESTRUCTIVE` for deletes, merges and cancels. If you add a destructive tool, update the exact list in `tests/tools.test.ts`.
+4. **Schemas:** build them only from the factory helpers (`repoRef()`, `pagination()`, `responseFormatSchema()`...), called once per use. Reusing a zod instance produces `$ref`, which strict clients reject. `.describe()` every parameter; the tests enforce both rules.
+5. **Output:** read tools return `formatResult(format, markdown, json)`. JSON must be a compact projection, never a raw API object. Text written by other people (bodies, comments, files, logs) goes through `untrusted()` or a code block.
+6. **Errors:** throw `ToolInputError` for bad input combinations, and let `ForgejoError` propagate. Never put the token in messages.
+7. **Paths:** use `repoPath()`. Encode user-supplied segments with `encodeURIComponent`, or with `encodePath` for file paths, branches and refs. The client rejects `.`/`..` segments centrally; don't work around that.
+8. **Version gating:** features that only exist in newer Forgejo releases set `minVersion: '16.0'` (or similar). Check the endpoint against a v14 swagger first.
+9. Add behaviour tests (`fakeForgejo` + `connect` from `tests/helpers.ts`), then run `npm run docs:tools`.
 
-See [DEVELOPER.md](DEVELOPER.md) for complete code examples and patterns.
+## Rules
 
-## Blocked Features
+- Never store credentials in `process.env`, module state or logs. They exist only in the per-request closure in `createForgejoServer`.
+- Don't weaken the SSRF guard (`ssrf.ts`, `url.ts`) or the redirect refusal in `client.ts`. The hosted server fetches URLs that users typed in.
+- The HTTP server is stateless. Don't add sessions.
+- Keep dependencies minimal. The runtime deps are the MCP SDK, express, cors, zod, undici and yaml.
+- Commit style: conventional commits (`feat:`, `fix:`, `docs:`, `chore:`, `test:`, `build:`).
 
-Some features are blocked on upstream API/SDK support. See `docs/plans/` for:
+## Deployment
 
-- `wiki-support.md` - Wiki API (blocked on forgejo-sdk)
-- `projects-support.md` - Projects/Kanban API (blocked on Gitea 1.26.0)
-
-## Repository Labels
-
-Labels for goern/forgejo-mcp on Codeberg:
-
-| ID | Name | Color | Description |
-|----|------|-------|-------------|
-| 335058 | Kind/Feature | 0288d1 | New functionality |
-| 335061 | Kind/Enhancement | 84b6eb | Improve existing functionality |
-| 335091 | Status/Blocked | 880e4f | Something is blocking this issue or pull request |
-| 335103 | Priority/Medium | e64a19 | The priority is medium |
-
-### Usage with Codeberg MCP
-
-When adding labels via the `mcp__codeberg__add_issue_labels` tool, use the numeric ID:
-
-```
-mcp__codeberg__add_issue_labels(
-  owner: "goern",
-  repo: "forgejo-mcp",
-  index: <issue_number>,
-  labels: "<label_id>"  # e.g., "335091" for Status/Blocked
-)
-```
-
-## Landing the Plane (Session Completion)
-
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
-
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
-   ```bash
-   git pull --rebase
-   bd sync
-   git push
-   git status  # MUST show "up to date with origin"
-   ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
-
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
+The `deploy-vps.yml` workflow runs the tests on push to `main`, then deploys over SSH to `/opt/mcp-servers/forgejo` (Docker, `127.0.0.1:${MCP_HOST_PORT}` (default 8099), nginx `location /forgejo/`). See [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md). The key-service side is the `forgejo` connector in `hithereiamaliff/mcp-key-service`.

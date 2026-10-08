@@ -1,0 +1,74 @@
+# Forgejo MCP Server - Docker Compose (VPS)
+#
+# - Bound to 127.0.0.1 only: the container is reachable through nginx, never
+#   directly from the internet (Docker-published ports otherwise bypass ufw).
+# - Joins the shared external "mcp-network" so it can reach mcp-key-service
+#   by container name (created by the mcp-key-service deploy, or by the
+#   deploy workflow in this repo if missing).
+
+services:
+  mcp-forgejo:
+    build: .
+    container_name: mcp-forgejo
+    restart: unless-stopped
+    ports:
+      # Host port comes from MCP_HOST_PORT in .env (default 8099); pick a free
+      # one on the host with `ss -tlnp`.
+      - "127.0.0.1:${MCP_HOST_PORT:-8099}:8080"
+    environment:
+      - PORT=8080
+      - HOST=0.0.0.0
+      - NODE_ENV=production
+      - ANALYTICS_DIR=/app/data
+      - PUBLIC_BASE_PATH=${PUBLIC_BASE_PATH:-/forgejo}
+      # Hosted mode (mcp-key-service). On the VPS:
+      #   KEY_SERVICE_URL=http://mcp-key-service:8090/internal/resolve
+      - KEY_SERVICE_URL=${KEY_SERVICE_URL:-}
+      - KEY_SERVICE_TOKEN=${KEY_SERVICE_TOKEN:-}
+      - KEY_SERVICE_SERVER_ID=${KEY_SERVICE_SERVER_ID:-forgejo}
+      - KEY_PORTAL_URL=${KEY_PORTAL_URL:-https://mcpkeys.techmavie.digital}
+      # Self-hosted mode + analytics access
+      - MCP_API_KEY=${MCP_API_KEY:-}
+      - FORGEJO_URL=${FORGEJO_URL:-}
+      - FORGEJO_ACCESS_TOKEN=${FORGEJO_ACCESS_TOKEN:-}
+      # Tool selection defaults (clients can override per request)
+      - FORGEJO_TOOLSETS=${FORGEJO_TOOLSETS:-default}
+      - FORGEJO_READ_ONLY=${FORGEJO_READ_ONLY:-false}
+      # Outbound network policy (SSRF guard). Keep these off on the public server.
+      - FORGEJO_ALLOW_HTTP=${FORGEJO_ALLOW_HTTP:-false}
+      - FORGEJO_ALLOW_PRIVATE_HOSTS=${FORGEJO_ALLOW_PRIVATE_HOSTS:-false}
+      - FORGEJO_TRUSTED_HOSTS=${FORGEJO_TRUSTED_HOSTS:-}
+      # Optional
+      - FORGEJO_TIMEOUT_MS=${FORGEJO_TIMEOUT_MS:-30000}
+      - FORGEJO_MAX_RESPONSE_MB=${FORGEJO_MAX_RESPONSE_MB:-20}
+      - MCP_BODY_LIMIT=${MCP_BODY_LIMIT:-10mb} # keep below nginx client_max_body_size (12M)
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      - MCP_PROTOCOL_VERSION=${MCP_PROTOCOL_VERSION:-2025-11-25}
+      - MCP_TRACE_HTTP=${MCP_TRACE_HTTP:-false}
+      - ENABLE_MCP_DIAGNOSTICS=${ENABLE_MCP_DIAGNOSTICS:-false}
+    # If the container can't reach a Forgejo instance on the same host through its
+    # public IP (hairpin NAT), uncomment this and set FORGEJO_TRUSTED_HOSTS=<that host>:
+    # extra_hosts:
+    #   - "git.example.com:host-gateway"
+    volumes:
+      - analytics-data:/app/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget --no-verbose --tries=1 --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    networks:
+      - mcp-network
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  mcp-network:
+    external: true
+
+volumes:
+  analytics-data:

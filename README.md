@@ -99,6 +99,8 @@ https://mcp.techmavie.digital/forgejo/mcp/usr_YOUR_KEY?read_only=true
 
 `read_only=true` (or `X-Forgejo-Read-Only: true`, or `FORGEJO_READ_ONLY=true`) hides every tool that writes, whatever toolsets are enabled. For a hard guarantee, also use a token with read-only scopes.
 
+The key always comes directly after `/mcp/`, then a **`?`** before the options. To change the toolsets of a connector you already added in Claude, **remove it and add it again** with the new URL; editing the URL in place can leave a stale sign-in state. `forgejo_hello` shows which toolsets are active.
+
 The full list with parameters is in **[TOOLS.md](TOOLS.md)** (generated from the code).
 
 ## What it's good at
@@ -121,9 +123,21 @@ Forgejo tokens have `read:`/`write:` scopes per area. Pick what you need:
 | `orgs` toolset | + `organization` |
 | `packages` toolset | + `package` |
 | `admin` toolset | + `admin` (site admins only) |
+| Deleting repositories (`repo_admin`) | `write:user` (`write:organization` for org repos), required by Forgejo 15+ |
 | Read-only connection | the same, `read:` only |
 
 Without `read:user`, everything still works except tools that need your user name. `forgejo_hello` explains this. Repository-specific tokens (Forgejo 15+) work too. If a scope is missing, tools tell you exactly which one.
+
+## Troubleshooting the connection
+
+| What you see | Cause | Fix |
+|---|---|---|
+| Claude asks you to **sign in** | The server answered "not authenticated": the `usr_` key is missing from the URL, `&` was used instead of `?`, or the key is old (re-creating a connection in the portal issues a new key). This server has no OAuth login. | Use `https://mcp.techmavie.digital/forgejo/mcp/usr_KEY?toolsets=…` with the current key, and re-add the connector |
+| Only the default tools appear | The option name is misspelled (it is `toolsets`, plural) | Fix the URL and re-add the connector |
+| `Unknown toolset(s): …` | A toolset name is misspelled | Use a name from the table above |
+| A tool says a token scope is missing | The Forgejo token lacks that scope | Create a token with it and update the connection in the portal |
+
+[deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md#sign-in-prompt-or-connection-errors) has two copy-paste commands that **check a connector URL without sharing your key** and build a correct URL with extra toolsets.
 
 ## Authentication modes
 
@@ -215,6 +229,14 @@ tests/                  # node:test suites (core, ssrf, client, key service, too
 scripts/                # smoke-test.mjs, generate-tools-md.ts
 deploy/                 # DEPLOYMENT.md, nginx-mcp.conf
 ```
+
+## Documentation
+
+| Document | What's in it |
+|---|---|
+| [TOOLS.md](TOOLS.md) | Every tool with its parameters (generated from the code) |
+| [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md) | Deployment and usage guide: hosted server, local mode, self-hosting, troubleshooting |
+| [CHANGELOG.md](CHANGELOG.md) | Release notes |
 
 ## License
 

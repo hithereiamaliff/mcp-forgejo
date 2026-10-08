@@ -2,8 +2,14 @@ name: CI
 
 on:
   pull_request:
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   push:
     branches-ignore: [main] # main is tested by the deploy workflow
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
 
 jobs:
   test:

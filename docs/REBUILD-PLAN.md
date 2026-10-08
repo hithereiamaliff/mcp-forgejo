@@ -1,6 +1,6 @@
 # Forgejo MCP v3: Revamp Plan
 
-> **Status:** Draft for review, 2026-10-08. Nothing gets built until Aliff approves.
+> **Status:** Approved by Aliff on 2026-10-08 (recommended options D1–D7). Implemented on branch `feat/typescript-rewrite`; Phase 7 (VPS deploy) is waiting on the steps in §8.
 > **Replaces:** the April 2026 rebuild plan (commit `dcbd650`). The corrections are listed in §1.5.
 > **Goal:** Replace the Go fork of `goern/forgejo-mcp` with a TypeScript MCP server. It should follow the proven **TechMavie v2 pattern** (`mcp-zerobounce` v2 / `mcp-github` v2), integrate fully with `mcp-key-service`, support multiple tenants (any Forgejo instance, including Codeberg), and cover far more of the Forgejo API than today.
 

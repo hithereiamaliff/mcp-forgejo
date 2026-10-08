@@ -30,10 +30,12 @@ test('sends the token header, JSON body and query parameters', async () => {
   assert.equal(req.url, `${TEST_INSTANCE}/api/v1/repos/o/r/issues?a=1&list=p&list=q`);
 });
 
-test('no Authorization header without a token', async () => {
-  const f = fakeFetch(() => json({}));
-  await client(f.fetch, { token: undefined }).get('/version');
+test('no Authorization header without a token, and a clear message when one is needed', async () => {
+  const f = fakeFetch(() => json({}), () => json({ message: 'token is required' }, 401));
+  const c = client(f.fetch, { token: undefined });
+  await c.get('/version');
   assert.equal(f.requests[0].headers.authorization, undefined);
+  await assert.rejects(c.get('/user'), (e: ForgejoError) => e.kind === 'auth' && /needs a Forgejo access token, but none is configured/.test(e.message));
 });
 
 test('list() caps the page size at the instance limit and reads X-Total-Count', async () => {

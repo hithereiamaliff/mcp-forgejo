@@ -308,7 +308,7 @@ export const updateIssue = defineTool({
   inputSchema: {
     ...repoRef(),
     index: indexSchema(),
-    title: z.string().trim().min(1).max(255).optional(),
+    title: z.string().trim().min(1).max(255).optional().describe('New title'),
     body: z.string().max(65_000).optional().describe('New description (replaces the old one)'),
     state: z.enum(['open', 'closed']).optional().describe('"closed" to close, "open" to reopen'),
     assignees: userListSchema('Replace the assignees with these users ([] removes all)').optional(),

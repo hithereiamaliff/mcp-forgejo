@@ -379,7 +379,7 @@ export const updatePullRequest = defineTool({
   inputSchema: {
     ...repoRef(),
     index: indexSchema('pull request'),
-    title: z.string().trim().min(1).max(255).optional(),
+    title: z.string().trim().min(1).max(255).optional().describe('New title'),
     body: z.string().max(65_000).optional().describe('New description (replaces the old one)'),
     base: z.string().trim().min(1).max(250).optional().describe('Change the target branch'),
     state: z.enum(['open', 'closed']).optional().describe('"closed" to close without merging, "open" to reopen'),
@@ -388,7 +388,7 @@ export const updatePullRequest = defineTool({
     milestone: z.union([z.string().trim().min(1), z.number().int().nonnegative()]).optional().describe('Milestone title or ID; 0 removes it'),
     assignees: userListSchema('Replace the assignees ([] removes all)').optional(),
     due_date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}(T.*)?$/).optional().describe('Due date YYYY-MM-DD'),
-    remove_due_date: z.boolean().optional(),
+    remove_due_date: z.boolean().optional().describe('Remove the due date'),
     allow_maintainer_edit: z.boolean().optional().describe('Let maintainers push to the head branch'),
     response_format: responseFormatSchema(),
   },

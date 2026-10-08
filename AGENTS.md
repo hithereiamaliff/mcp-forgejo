@@ -55,4 +55,4 @@ src/cli.ts ─────────┴─ src/index.ts ───────�
 
 ## Deployment
 
-The `deploy-vps.yml` workflow runs the tests on push to `main`, then deploys over SSH to `/opt/mcp-servers/forgejo` (Docker, `127.0.0.1:${MCP_HOST_PORT}` (default 8099), nginx `location /forgejo/`). See [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md). The key-service side is the `forgejo` connector in `hithereiamaliff/mcp-key-service`.
+The `deploy-vps.yml` workflow runs the tests on push to `main`, then deploys over SSH to `/opt/mcp-servers/forgejo` (Docker, `127.0.0.1:${MCP_HOST_PORT}` (default 8099), nginx `location /forgejo/`). See [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md) (copy-paste runbook and production record; production host port is 8100). The key-service side is the `forgejo` connector in `hithereiamaliff/mcp-key-service`. Upgrading the self-hosted Forgejo instance is covered in [docs/FORGEJO-UPGRADE.md](docs/FORGEJO-UPGRADE.md). When giving VPS steps, write commands that need no manual editing: detect values on the server, back up first, and roll back automatically.

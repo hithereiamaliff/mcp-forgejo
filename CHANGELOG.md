@@ -1,6 +1,6 @@
 # Changelog
 
-## 3.0.0 (unreleased)
+## 3.0.0 (2026-10-08)
 
 Complete rewrite in TypeScript on the TechMavie MCP v2 pattern. The Go implementation (a fork of [goern/forgejo-mcp](https://codeberg.org/goern/forgejo-mcp), last version 2.17.0) is kept at tag `go-legacy-v2.17.0`.
 
@@ -36,3 +36,11 @@ Complete rewrite in TypeScript on the TechMavie MCP v2 pattern. The Go implement
   - untrusted-content fencing against prompt injection
   - destructive-action annotations, with name confirmation required to delete repositories and organizations
 - **Tests:** about 170 `node:test` cases (unit, tool behaviour with a fake Forgejo, HTTP integration with a fake key service), plus a live smoke test.
+
+### Deployment (2026-10-08)
+
+- Deployed to https://mcp.techmavie.digital/forgejo with the `forgejo` connector in mcp-key-service.
+- The host port is configurable (`MCP_HOST_PORT` in the VPS `.env`) after the planned port 8098 turned out to be taken; production uses 8100.
+- End-to-end tested through Claude, covering reads, commits, PR review/merge, issues, mirror sync and repository deletion.
+- Copy-paste runbooks: [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md) and [docs/FORGEJO-UPGRADE.md](docs/FORGEJO-UPGRADE.md). The Forgejo instance itself was upgraded from 14.0.3 to 15.0.9 LTS the same day.
+- Docs-only changes no longer trigger a redeploy.

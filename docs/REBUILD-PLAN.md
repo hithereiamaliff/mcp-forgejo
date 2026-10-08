@@ -189,7 +189,7 @@ Runtime dependencies are kept small: `@modelcontextprotocol/sdk`, `express`, `co
 Claude.ai / Cursor / Claude Code
   │  POST https://mcp.techmavie.digital/forgejo/mcp/usr_…      (or Bearer usr_… / X-API-Key / ?api_key=)
   ▼
-Nginx  location /forgejo/ → 127.0.0.1:8098   (access_log off, no CORS here)
+Nginx  location /forgejo/ → 127.0.0.1:$MCP_HOST_PORT (default 8099; access_log off, no CORS here)
   ▼
 mcp-forgejo (Express 5)
   ├─ resolveHosted(usr_…) ──► KeyServiceClient ──► POST mcp-key-service:8090/internal/resolve
@@ -540,11 +540,11 @@ Done as a **separate branch and PR** in that repo. The local checkout is one com
 |---|---|
 | Public URL | `https://mcp.techmavie.digital/forgejo/mcp/usr_…` (+ `/forgejo/health`, `/forgejo/analytics/dashboard`, `/forgejo/.well-known/mcp/server-card.json`) |
 | Container / service | `mcp-forgejo` |
-| Host port | **`127.0.0.1:8098:8080`**. 8098 is not referenced by any repo; confirm on the VPS with `ss -tlnp \| grep :8098`. |
+| Host port | **`127.0.0.1:${MCP_HOST_PORT:-8099}:8080`**, set in the VPS `.env`. 8098 turned out to be taken by the Singapore Open Data MCP (deployed the same day), so the port is configurable instead of hard-coded. |
 | Network | `mcp-network` with **`external: true`** (reaches `mcp-key-service:8090`) |
 | Volume | `analytics-data:/app/data` |
 | VPS dir | `/opt/mcp-servers/forgejo` (`.env` created by hand, never committed) |
-| Nginx | `location /forgejo/ { proxy_pass http://127.0.0.1:8098/; proxy_buffering off; proxy_request_buffering off; proxy_read_timeout 300s; client_max_body_size 12M; access_log off; }`. No CORS here. |
+| Nginx | `location /forgejo/ { proxy_pass http://127.0.0.1:<MCP_HOST_PORT>/; proxy_buffering off; proxy_request_buffering off; proxy_read_timeout 300s; client_max_body_size 12M; access_log off; }`. No CORS here. |
 | Dockerfile | multi-stage `node:24-alpine`, `npm ci --ignore-scripts`, non-root `mcp` user, `HEALTHCHECK wget 127.0.0.1:8080/health` |
 | CI | `ci.yml` runs typecheck and tests on PRs. `deploy-vps.yml` runs on push to `main`: tests, then SSH (`appleboy/ssh-action`, secrets `VPS_HOST`/`VPS_USERNAME`/`VPS_SSH_KEY`/`VPS_PORT`), `git reset --hard origin/main`, require `.env`, ensure `mcp-network`, build before `up -d`, poll `/health` 20×3s, dump logs on failure. |
 
@@ -611,7 +611,7 @@ Rough effort is 4–6 working sessions. Phases 3 and 4 are the bulk.
 1. **Review and approve** this plan and the decisions in §9.
 2. **Create a Forgejo access token** for testing on `git.mynameisaliff.co.uk` (all scopes, or at least repository, issue, notification, user and organization at read/write). Put it in a local `.env` in this repo as `FORGEJO_URL=…` and `FORGEJO_ACCESS_TOKEN=…`. The file is git-ignored, and I will never print the token.
 3. **VPS steps** before the final merge:
-   1. `ss -tlnp | grep :8098` must return nothing.
+   1. Pick a free port (`ss -tlnp`) and set it as `MCP_HOST_PORT` in the server `.env`.
    2. Add `forgejo:<hex>` to `/opt/mcp-key-service/.env`.
    3. Create `/opt/mcp-servers/forgejo/.env` with `MCP_API_KEY`, `KEY_SERVICE_URL`, and `KEY_SERVICE_TOKEN` (the same hex).
    4. Include the nginx location block and reload nginx.
@@ -630,7 +630,7 @@ Rough effort is 4–6 working sessions. Phases 3 and 4 are the bulk.
 | **D4** | Repo strategy | **Rewrite in place** on `feat/typescript-rewrite`, tag `go-legacy-v2.17.0`, keep the repo name, credit upstream in the README. | A new repo (e.g. `mcp-forgejo-ts`) and archive this fork. |
 | **D5** | Forgejo instance upgrade (outside MCP scope) | **Upgrade to 15.0.x LTS now** for the security fixes (supported to Jul 2027). The MCP version-gates the 16+/17+ Actions tools either way. | 17.0 (out 15 Oct) for job logs, cancel and rerun, at the cost of upgrading every quarter. |
 | **D6** | Key-service URL hardening | **Yes**: http(s)-only and trimmed values for `url` fields, in the same PR. Small, and it benefits three existing connectors. | Connector only. |
-| **D7** | Port / path | **8098, `/forgejo/`** | another free port |
+| **D7** | Port / path | **`/forgejo/`; port from `MCP_HOST_PORT` (8098 was taken)** | another free port |
 
 ---
 

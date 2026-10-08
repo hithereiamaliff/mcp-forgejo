@@ -55,4 +55,4 @@ src/cli.ts ─────────┴─ src/index.ts ───────�
 
 ## Deployment
 
-The `deploy-vps.yml` workflow runs the tests on push to `main`, then deploys over SSH to `/opt/mcp-servers/forgejo` (Docker, `127.0.0.1:8098`, nginx `location /forgejo/`). See [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md). The key-service side is the `forgejo` connector in `hithereiamaliff/mcp-key-service`.
+The `deploy-vps.yml` workflow runs the tests on push to `main`, then deploys over SSH to `/opt/mcp-servers/forgejo` (Docker, `127.0.0.1:${MCP_HOST_PORT}` (default 8099), nginx `location /forgejo/`). See [deploy/DEPLOYMENT.md](deploy/DEPLOYMENT.md). The key-service side is the `forgejo` connector in `hithereiamaliff/mcp-key-service`.

@@ -10,7 +10,7 @@ https://mcp.techmavie.digital/forgejo
 |---|---|
 | Directory on VPS | `/opt/mcp-servers/forgejo` |
 | Container | `mcp-forgejo` |
-| Host port | `127.0.0.1:8098` (8083–8097 are taken by other MCPs; check with `ss -tlnp \| grep ':8098'`) |
+| Host port | `127.0.0.1:${MCP_HOST_PORT}` from `.env` (default `8099`). 8083–8098 are taken by other MCPs; check a port with `ss -tlnp \| grep ':8099'` |
 | Docker network | `mcp-network` (external, shared with `mcp-key-service`) |
 | Key-service server ID | `forgejo` |
 
@@ -61,6 +61,7 @@ nano .env
 KEY_SERVICE_URL=http://mcp-key-service:8090/internal/resolve
 KEY_SERVICE_TOKEN=<FORGEJO_TOKEN>          # same value as in step 1
 MCP_API_KEY=<openssl rand -hex 32>         # protects /analytics and self-hosted mode
+MCP_HOST_PORT=8099                         # a free port; must match proxy_pass in nginx
 ```
 
 Leave `FORGEJO_URL` and `FORGEJO_ACCESS_TOKEN` empty on the hosted server: every user brings their own instance and token through the key service. Keep `FORGEJO_ALLOW_HTTP` and `FORGEJO_ALLOW_PRIVATE_HOSTS` off. They exist for private single-user deployments, and on a shared server they would let users reach internal services.
@@ -68,7 +69,7 @@ Leave `FORGEJO_URL` and `FORGEJO_ACCESS_TOKEN` empty on the hosted server: every
 ### 4. Check the port is free and start the container
 
 ```bash
-ss -tlnp | grep ':8098' || echo "8098 is free"
+ss -tlnp | grep ':8099' || echo "8099 is free"
 docker network inspect mcp-network >/dev/null 2>&1 || docker network create mcp-network
 docker compose up -d --build
 docker compose logs -f

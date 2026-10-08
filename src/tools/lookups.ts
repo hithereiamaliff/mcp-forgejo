@@ -72,6 +72,25 @@ export async function resolveMilestoneId(client: ForgejoClient, owner: string, r
   }
 }
 
+/**
+ * Turn a branch/tag name (or nothing = default branch) into a commit SHA.
+ * Needed for endpoints whose ref is a single path segment (git/trees/{sha},
+ * git/commits/{sha}, commits/{ref}/status), which break on names like "feature/x".
+ */
+export async function resolveCommitSha(client: ForgejoClient, owner: string, repo: string, ref?: string): Promise<string> {
+  if (ref && /^[0-9a-f]{7,64}$/i.test(ref)) return ref;
+  const commits = await client.get<Json[]>(repoPath(owner, repo, 'commits'), {
+    sha: ref,
+    limit: 1,
+    stat: false,
+    verification: false,
+    files: false,
+  });
+  const sha = Array.isArray(commits) && typeof commits[0]?.sha === 'string' ? commits[0].sha : undefined;
+  if (!sha) throw new ToolInputError(`Could not find ${ref ? `"${ref}"` : 'the default branch'} in ${owner}/${repo} (is the repository empty?).`);
+  return sha;
+}
+
 /** The authenticated user's login (needs read:user). */
 export async function currentLogin(client: ForgejoClient): Promise<string> {
   const me = await client.get<Json>('/user');

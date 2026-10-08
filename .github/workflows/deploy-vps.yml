@@ -72,9 +72,13 @@ jobs:
               docker compose up -d --remove-orphans
             fi
 
-            echo "Waiting for health check..."
+            # Same host port docker-compose uses (MCP_HOST_PORT in .env, default 8099)
+            HOST_PORT=$(grep -E '^MCP_HOST_PORT=' .env | tail -1 | cut -d= -f2 | tr -d '[:space:]"')
+            HOST_PORT=${HOST_PORT:-8099}
+
+            echo "Waiting for health check on 127.0.0.1:$HOST_PORT..."
             for i in $(seq 1 20); do
-              if curl -sf http://127.0.0.1:8099/health > /dev/null 2>&1; then
+              if curl -sf "http://127.0.0.1:$HOST_PORT/health" > /dev/null 2>&1; then
                 echo "Health check passed."
                 docker compose ps
                 echo "Deployment completed at $(date)"

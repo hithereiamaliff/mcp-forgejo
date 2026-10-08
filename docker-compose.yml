@@ -12,7 +12,9 @@ services:
     container_name: mcp-forgejo
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8099:8080"
+      # Host port comes from MCP_HOST_PORT in .env (default 8099); pick a free
+      # one on the host with `ss -tlnp`.
+      - "127.0.0.1:${MCP_HOST_PORT:-8099}:8080"
     environment:
       - PORT=8080
       - HOST=0.0.0.0

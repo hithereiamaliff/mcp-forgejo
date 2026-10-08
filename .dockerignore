@@ -1,0 +1,26 @@
+# Only package files, tsconfig and src/ are needed to build the image
+.env
+.env.*
+!.env.sample
+.git
+.github
+.gitignore
+.gitattributes
+.npmignore
+.kilocode/
+.claude/
+.vscode/
+.idea/
+.credentials/
+data/
+deploy/
+dist/
+build/
+node_modules/
+tests/
+scripts/
+npm-debug.log
+*.md
+LICENSE
+docker-compose.yml
+Dockerfile

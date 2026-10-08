@@ -1,0 +1,15 @@
+# package.json "files" already limits the package to dist/; this is a safety net.
+src/
+tests/
+scripts/
+deploy/
+.github/
+.kilocode/
+.claude/
+.env
+.env.*
+!.env.sample
+tsconfig.json
+docker-compose.yml
+Dockerfile
+data/

@@ -1,35 +1,18 @@
 {
-    "mcpServers": {
-        "context7": {
-            "type": "http",
-            "url": "https://mcp.context7.com/mcp"
-        },
-        "codeberg-devel": {
-            "type": "stdio",
-            "command": "./forgejo-mcp",
-            "args": [
-                "-transport",
-                "stdio",
-                "-token",
-                "${CODEBERG_ACCESS_TOKEN}",
-                "-url",
-                "https://codeberg.org"
-            ],
-            "env": {}
-        },
-        "codeberg": {
-            "type": "stdio",
-            "command": "/home/goern/go/bin/forgejo-mcp",
-            "args": [
-                "-transport",
-                "stdio",
-                "-token",
-                "${CODEBERG_ACCESS_TOKEN}",
-                "-url",
-                "https://codeberg.org"
-            ],
-            "env": {}
-        }
- 
+  "mcpServers": {
+    "context7": {
+      "type": "http",
+      "url": "https://mcp.context7.com/mcp"
+    },
+    "forgejo-dev": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["dist/cli.js"],
+      "env": {
+        "FORGEJO_URL": "${FORGEJO_URL}",
+        "FORGEJO_ACCESS_TOKEN": "${FORGEJO_ACCESS_TOKEN}",
+        "FORGEJO_TOOLSETS": "all"
+      }
     }
+  }
 }

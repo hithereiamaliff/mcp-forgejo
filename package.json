@@ -1,0 +1,69 @@
+{
+  "name": "mcp-forgejo",
+  "version": "3.0.0",
+  "description": "MCP server for Forgejo (self-hosted or Codeberg): repositories, files, branches, issues, pull requests, reviews, notifications, Actions, releases, wiki, orgs and more. Hosted via mcp-key-service or run locally over stdio.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "mcp-forgejo": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20.18.1"
+  },
+  "scripts": {
+    "build": "npm run build:tsc",
+    "build:tsc": "tsc",
+    "dev": "npm run dev:http",
+    "dev:http": "tsx src/http-server.ts",
+    "start": "node dist/http-server.js",
+    "start:http": "node dist/http-server.js",
+    "cli": "node dist/cli.js",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test tests/*.test.ts",
+    "smoke": "node scripts/smoke-test.mjs",
+    "prepare": "npm run build",
+    "docs:tools": "tsx scripts/generate-tools-md.ts"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "forgejo",
+    "codeberg",
+    "gitea",
+    "git",
+    "issues",
+    "pull-requests"
+  ],
+  "author": "hithereiamaliff",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hithereiamaliff/mcp-forgejo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hithereiamaliff/mcp-forgejo/issues"
+  },
+  "homepage": "https://github.com/hithereiamaliff/mcp-forgejo#readme",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "undici": "^7.30.0",
+    "yaml": "^2.9.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3"
+  }
+}

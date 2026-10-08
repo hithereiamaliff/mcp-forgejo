@@ -1,0 +1,88 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: # allow a manual run from the Actions tab
+
+concurrency:
+  group: deploy-vps
+  cancel-in-progress: false
+
+jobs:
+  test:
+    name: Typecheck and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci --ignore-scripts
+      - run: npm run typecheck
+      - run: npm test
+
+  deploy:
+    name: Deploy to VPS
+    needs: test # never deploy a build that fails its tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USERNAME }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || secrets.VPS_SSH_PORT || 22 }}
+          script: |
+            set -e
+
+            DEPLOY_DIR="/opt/mcp-servers/forgejo"
+
+            # Clone on first run, otherwise sync to origin/main
+            if [ ! -d "$DEPLOY_DIR/.git" ]; then
+              git clone https://github.com/hithereiamaliff/mcp-forgejo.git "$DEPLOY_DIR"
+            else
+              cd "$DEPLOY_DIR"
+              git fetch origin main
+              git reset --hard origin/main
+            fi
+
+            cd "$DEPLOY_DIR"
+
+            # Secrets live in a .env created once by hand on the VPS (see deploy/DEPLOYMENT.md)
+            if [ ! -f .env ]; then
+              echo "ERROR: $DEPLOY_DIR/.env not found. Create it from .env.sample first."
+              exit 1
+            fi
+
+            # Shared network used to reach mcp-key-service by container name
+            docker network inspect mcp-network >/dev/null 2>&1 || docker network create mcp-network
+
+            # Build first: the running container keeps serving until the new image is ready,
+            # and a failed build leaves the current version running.
+            docker compose build
+
+            # Recreate the container from the new image. If an old container with the same
+            # name exists outside this compose project, remove it and try once more.
+            if ! docker compose up -d --remove-orphans; then
+              docker rm -f mcp-forgejo 2>/dev/null || true
+              docker compose up -d --remove-orphans
+            fi
+
+            echo "Waiting for health check..."
+            for i in $(seq 1 20); do
+              if curl -sf http://127.0.0.1:8098/health > /dev/null 2>&1; then
+                echo "Health check passed."
+                docker compose ps
+                echo "Deployment completed at $(date)"
+                exit 0
+              fi
+              sleep 3
+            done
+
+            echo "Health check failed after 60 seconds"
+            docker compose logs --tail=80 mcp-forgejo
+            exit 1
